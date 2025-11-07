@@ -246,16 +246,6 @@
       // Accessibility: if user prefers reduced motion, shorten visual effects (handled by CSS)
       // That's it — tweak WINDOW_MS, NEEDED, VISIBLE_MS above to adjust sensitivity and duration.
 
-      // OPTIONAL: show a tiny transient subheading to hint about clickable area
-      (function showHint() {
-        subHeading.textContent = "Click here";
-        subHeading.classList.remove('hidden');
-        setTimeout(() => {
-          // fade it out after a few seconds but leave it accessible
-          subHeading.classList.add('hidden');
-        }, 2500);
-      })();
-
     })();
   </script>
 </body>
