@@ -1,40 +1,262 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>chiwiwi</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Work in Progress</title>
   <style>
-    html, body {
+    /* Reset & layout */
+    html,body {
       height: 100%;
       margin: 0;
-      padding: 0;
+      background: #000;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
     }
-    body {
-      background: url("7035BC48-9B9D-4D16-854A-1F69506CFCD2_1_105_c.jpeg") no-repeat center center fixed;
-      background-size: contain;
+
+    /* Video as full-screen background */
+    .bg-video {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover; /* fills screen while preserving aspect */
+      z-index: 0;
+      pointer-events: none; /* let clicks go through to overlays */
+      filter: brightness(0.8);
+    }
+
+    /* Centering overlay */
+    .overlay {
+      position: fixed;
+      inset: 0;
       display: flex;
-      justify-content: center;
       align-items: center;
+      justify-content: center;
+      z-index: 5;
+      user-select: none;
     }
+
+    /* Container for stacked text */
+    .center-stack {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      cursor: pointer; /* clicking area for secret */
+      gap: 0.5rem;
+    }
+
     h1 {
-      color: white;
-      font-family: Arial, Helvetica, sans-serif;
-      font-size: 3em;
-      text-shadow: 0 0 10px rgba(0,0,0,0.5);
+      margin: 0;
+      color: #fff;
+      font-size: clamp(2rem, 6vw, 4rem);
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      font-weight: 700;
+      text-shadow: 0 6px 14px rgba(0,0,0,0.6), 0 1px 0 rgba(255,255,255,0.02);
+      transition: opacity 450ms ease, transform 450ms ease;
+      will-change: opacity, transform;
     }
+
     h2 {
-      color: white;
-      font-family: Arial, Helvetica, sans-serif;
-      font-size: 1.5em;
-      margin-top: 0.5em;
-      text-shadow: 0 0 10px rgba(0,0,0,0.5);
+      margin: 0;
+      color: #fff;
+      font-size: clamp(1rem, 3vw, 1.25rem);
+      font-weight: 400;
+      opacity: 0.95;
+      transition: opacity 350ms ease, transform 350ms ease;
+      will-change: opacity, transform;
+    }
+
+    /* Hidden state */
+    .hidden {
+      opacity: 0 !important;
+      transform: translateY(6px) scale(0.995);
+      pointer-events: none;
+    }
+
+    /* Secret overlay (image + "Be patient!") */
+    .secret {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10;
+      pointer-events: none; /* image should not intercept clicks; clicks go to center area */
+      opacity: 0;
+      transition: opacity 450ms ease;
+    }
+    .secret.visible {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .secret-inner {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1rem;
+      text-align: center;
+      backdrop-filter: blur(0px); /* no heavy blur by default */
+    }
+
+    .secret img {
+      max-width: 85vw;
+      max-height: 70vh;
+      width: auto;
+      height: auto;
+      object-fit: contain; /* important: contain fit */
+      border-radius: 6px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+    }
+
+    .secret p {
+      margin: 0;
+      color: #fff;
+      font-size: clamp(1rem, 2.8vw, 1.25rem);
+      font-weight: 600;
+      text-shadow: 0 4px 10px rgba(0,0,0,0.6);
+    }
+
+    /* subtle entrance for the main heading */
+    .fade-in {
+      opacity: 1;
+      transform: none;
+    }
+
+    /* respect reduced motion */
+    @media (prefers-reduced-motion: reduce) {
+      * { transition: none !important; animation: none !important; }
     }
   </style>
 </head>
 <body>
-  <h1>Work in Progress</h1>
-</body>
-<body>
-  <h2>Kiwi says be patient</h2>
+
+  <!-- Background video -->
+  <video class="bg-video" id="bgVideo" autoplay muted loop playsinline>
+    <source src="background.mp4" type="video/mp4">
+    <!-- fallback poster if video fails -->
+  </video>
+
+  <!-- Main overlay / click area (centered) -->
+  <div class="overlay" id="overlay">
+    <div class="center-stack" id="centerStack" title="Click rapidly 5 times">
+      <h1 id="mainHeading">Work in Progress</h1>
+      <h2 id="subHeading">—</h2>
+    </div>
+  </div>
+
+  <!-- Secret overlay (initially hidden) -->
+  <div class="secret" id="secretOverlay" aria-hidden="true">
+    <div class="secret-inner" id="secretInner">
+      <img src="kiwi.jpeg" alt="Secret image" id="secretImage" />
+      <p id="secretText">Be patient!</p>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      const centerStack = document.getElementById('centerStack');
+      const mainHeading = document.getElementById('mainHeading');
+      const subHeading = document.getElementById('subHeading');
+      const secretOverlay = document.getElementById('secretOverlay');
+
+      // Click-detection state
+      let clicks = []; // timestamps in ms
+      const WINDOW_MS = 1500; // time window to count rapid clicks (1.5s)
+      const NEEDED = 5;       // clicks needed
+
+      // Secret timing
+      const VISIBLE_MS = 3500; // how long the secret image stays visible (ms)
+      let secretTimeout = null;
+      let secretActive = false;
+
+      // Helper: show secret overlay
+      function showSecret() {
+        if (secretActive) return;
+        secretActive = true;
+
+        // fade out main heading
+        mainHeading.classList.add('hidden');
+        subHeading.classList.add('hidden');
+
+        // show secret
+        secretOverlay.classList.add('visible');
+        secretOverlay.setAttribute('aria-hidden', 'false');
+
+        // ensure pointer-events off on center while secret active? keep clicks active to allow re-trigger later if desired
+        // schedule revert
+        secretTimeout = setTimeout(hideSecret, VISIBLE_MS);
+      }
+
+      function hideSecret() {
+        if (!secretActive) return;
+        secretActive = false;
+
+        // hide secret
+        secretOverlay.classList.remove('visible');
+        secretOverlay.setAttribute('aria-hidden', 'true');
+
+        // fade main heading back in
+        // small delay to make the swap look nicer
+        setTimeout(() => {
+          mainHeading.classList.remove('hidden');
+          subHeading.classList.remove('hidden');
+        }, 120);
+        if (secretTimeout) { clearTimeout(secretTimeout); secretTimeout = null; }
+      }
+
+      // click handler to detect rapid clicks
+      function registerClick() {
+        const now = Date.now();
+        clicks.push(now);
+
+        // prune old timestamps
+        clicks = clicks.filter(ts => now - ts <= WINDOW_MS);
+
+        if (clicks.length >= NEEDED) {
+          // trigger secret
+          clicks = []; // reset
+          showSecret();
+        }
+      }
+
+      // Attach click on the centered area
+      centerStack.addEventListener('click', (e) => {
+        registerClick();
+      });
+
+      // initial state: ensure headings visible
+      mainHeading.classList.remove('hidden');
+      subHeading.classList.add('hidden');
+
+      // optional: allow keyboard "Enter" to trigger on centered area for accessibility
+      centerStack.tabIndex = 0;
+      centerStack.addEventListener('keyup', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') registerClick();
+      });
+
+      // small: pause the secret timer and hide if window loses focus (optional safety)
+      window.addEventListener('blur', () => {
+        if (secretActive) hideSecret();
+      });
+
+      // Accessibility: if user prefers reduced motion, shorten visual effects (handled by CSS)
+      // That's it — tweak WINDOW_MS, NEEDED, VISIBLE_MS above to adjust sensitivity and duration.
+
+      // OPTIONAL: show a tiny transient subheading to hint about clickable area
+      (function showHint() {
+        subHeading.textContent = "Click here";
+        subHeading.classList.remove('hidden');
+        setTimeout(() => {
+          // fade it out after a few seconds but leave it accessible
+          subHeading.classList.add('hidden');
+        }, 2500);
+      })();
+
+    })();
+  </script>
 </body>
 </html>
