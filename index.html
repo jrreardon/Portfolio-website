@@ -13,7 +13,7 @@
       overflow:hidden;
     }
 
-    /* Background video */
+    /* background video for desktop */
     .bg-video {
       position:fixed;
       inset:0;
@@ -22,10 +22,10 @@
       object-fit:cover;
       z-index:0;
       pointer-events:none;
-      filter:brightness(0.67);
+      filter:brightness(0.5);
     }
 
-    /* Center overlay (text) */
+    /* center text */
     .overlay {
       position:fixed;
       inset:0;
@@ -34,17 +34,15 @@
       justify-content:center;
       z-index:5;
       user-select:none;
+      text-align:center;
+      padding:1rem;
     }
-
     .center-stack {
       display:flex;
       flex-direction:column;
       align-items:center;
       gap:.5rem;
-      text-align:center;
-      cursor:pointer; /* whole page clickable anyway */
     }
-
     h1 {
       margin:0;
       color:#fff;
@@ -55,17 +53,15 @@
       text-shadow:0 6px 14px rgba(0,0,0,.6);
       transition:opacity .45s ease, transform .45s ease;
       will-change:opacity,transform;
-      pointer-events: none;
+      pointer-events:none;
     }
-
-    /* hidden state used when secret overlays */
     .hidden {
       opacity:0 !important;
       transform:translateY(6px) scale(.995);
       pointer-events:none;
     }
 
-    /* Secret overlay: contains the secret video (with poster) or fallback image + text */
+    /* secret overlay with smoother animation */
     .secret {
       position:fixed;
       inset:0;
@@ -75,48 +71,65 @@
       z-index:10;
       opacity:0;
       pointer-events:none;
-      transition:opacity .45s ease;
+      transition:opacity 420ms cubic-bezier(.22,.9,.35,1);
+      will-change:opacity;
     }
     .secret.visible {
       opacity:1;
       pointer-events:auto;
     }
-
     .secret-inner {
       display:flex;
       flex-direction:column;
       align-items:center;
       gap:1rem;
       text-align:center;
-      padding: 0.5rem;
-      max-width: 92vw;
+      max-width:min(92vw, 900px);
+      opacity:0;
+      transform:translateZ(0) scale(.995);
+      transition:opacity 420ms cubic-bezier(.22,.9,.35,1), transform 420ms cubic-bezier(.22,.9,.35,1);
+      will-change:opacity,transform;
     }
-
-    .secret video, .secret img {
+    .secret.visible .secret-inner {
+      opacity:1;
+      transform:translateZ(0) scale(1);
+    }
+    .secret video,
+    .secret img {
       max-width:85vw;
       max-height:70vh;
-      width:auto;
-      height:auto;
       object-fit:contain;
       border-radius:6px;
       box-shadow:0 10px 30px rgba(0,0,0,.6);
-      opacity:0;
-      transform: scale(0.995);
-      transition: opacity .35s ease, transform .35s ease;
+      backface-visibility:hidden;
+      -webkit-backface-visibility:hidden;
+      -webkit-transform:translateZ(0);
     }
-
-    .secret.visible video,
-    .secret.visible img {
-      opacity:1;
-      transform: none;
-    }
-
     .secret p {
       margin:0;
       color:#fff;
       font-size:clamp(1rem,2.8vw,1.25rem);
       font-weight:600;
       text-shadow:0 4px 10px rgba(0,0,0,.6);
+    }
+
+    /* -------- mobile / portrait tweaks -------- */
+    @media (max-width: 768px), (orientation: portrait) {
+      /* just make background black on mobile */
+      .bg-video {
+        display: none;
+      }
+      body {
+        background: #000;
+      }
+      h1 {
+        font-size: clamp(1.8rem, 9vw, 3rem);
+      }
+      .secret video,
+      .secret img {
+        max-width: 96vw;
+        max-height: 60vh;
+      }
     }
 
     @media (prefers-reduced-motion:reduce) {
@@ -126,162 +139,148 @@
 </head>
 <body>
 
-  <!-- background video (muted so autoplay works) -->
+  <!-- desktop background video -->
   <video id="bgVideo" class="bg-video" muted autoplay playsinline preload="auto" loop>
     <source src="background.mp4" type="video/mp4" />
-    <!-- If video missing, fallback JS sets body background -->
   </video>
 
-  <!-- center overlay -->
+  <!-- center text -->
   <div class="overlay">
-    <div class="center-stack" id="centerStack" tabindex="0" aria-label="Secret trigger area">
+    <div class="center-stack" id="centerStack" tabindex="0" aria-label="Secret trigger">
       <h1 id="mainHeading">Work in Progress</h1>
     </div>
   </div>
 
-  <!-- secret overlay - contains secret video (with poster kiwi.jpeg) and text -->
+  <!-- secret popup -->
   <div class="secret" id="secretOverlay" aria-hidden="true">
     <div class="secret-inner">
-      <!-- secret video: uses kiwi.mp4 if available, uses kiwi.jpeg as poster -->
-      <video id="secretVideo" poster="kiwi.jpeg" playsinline preload="auto" controlsList="nodownload" style="background:#000">
+      <!-- secret video: 6s long, with poster -->
+      <video
+        id="secretVideo"
+        poster="kiwi.jpeg"
+        playsinline
+        webkit-playsinline
+        preload="auto"
+        controlsList="nodownload"
+      >
         <source src="kiwi.mp4" type="video/mp4" />
-        <!-- if browser can't play video, the JS will show the poster image instead -->
       </video>
-      <p id="secretText">Kiwi says be patient!</p>
+      <p>Kiwi says be patient!</p>
     </div>
   </div>
 
   <script>
   (function () {
-    /* ---------- CONFIG ---------- */
-    const WINDOW_MS = 2000;   // 2 seconds
-    const NEEDED = 10;        // 10 clicks
-    const MAX_FALLBACK_MS = 3500; // if secret video doesn't exist, show poster for this long
+    /* config */
+    const WINDOW_MS = 2000;   // 10 clicks in 2s
+    const NEEDED    = 10;
+    const POST_SHOW_MS = 600; // after video ends, keep popup 0.6s
+    const MAX_FALLBACK_MS = 3500; // if no secret video plays, show poster this long
 
-    /* ---------- ELEMENTS ---------- */
-    const bg = document.getElementById('bgVideo');
-    const centerStack = document.getElementById('centerStack');
-    const mainHeading = document.getElementById('mainHeading');
-    const secretOverlay = document.getElementById('secretOverlay');
-    const secretVideo = document.getElementById('secretVideo');
+    const isMobile = window.matchMedia("(max-width: 768px), (orientation: portrait)").matches;
 
-    /* ---------- VIDEO PLAY / FALLBACK for background ---------- */
-    function useBgFallback() {
-      try { bg.style.display = 'none'; } catch(e) {}
-      document.body.style.background = `url("kiwi.jpeg") no-repeat center center fixed`;
-      document.body.style.backgroundSize = 'cover';
-      console.warn('Background video missing or blocked — using fallback image.');
-    }
+    /* elements */
+    const bg           = document.getElementById('bgVideo');
+    const mainHeading  = document.getElementById('mainHeading');
+    const secretOverlay= document.getElementById('secretOverlay');
+    const secretVideo  = document.getElementById('secretVideo');
 
-    function tryPlayBg() {
-      if (!bg) { useBgFallback(); return; }
-      bg.play().then(() => {
-        console.log('Background video playing.');
-      }).catch((err) => {
-        console.warn('Background autoplay prevented or failed:', err);
-        useBgFallback();
+    /* background video: desktop only */
+    function initBackground() {
+      if (!bg) return;
+      if (isMobile) {
+        // hide it for mobile so kiwi.jpeg doesn't take over
+        bg.style.display = 'none';
+        return;
+      }
+      bg.play().catch(() => {
+        // if desktop still can’t autoplay, just hide it and keep black bg
+        bg.style.display = 'none';
       });
     }
 
-    if (bg) {
-      bg.addEventListener('error', useBgFallback);
-      bg.addEventListener('stalled', () => console.warn('Background video stalled.'));
-      bg.addEventListener('ended', () => { bg.currentTime = 0; tryPlayBg(); /* defensive loop */ });
-      if (document.readyState === 'complete' || document.readyState === 'interactive') tryPlayBg();
-      else window.addEventListener('DOMContentLoaded', tryPlayBg);
-    } else {
-      useBgFallback();
+    initBackground();
+
+    /* secret logic */
+    let clicks = [];
+    let secretTimeout = null;
+    let secretActive  = false;
+
+    function clearSecretTimeout() {
+      if (secretTimeout) {
+        clearTimeout(secretTimeout);
+        secretTimeout = null;
+      }
     }
 
-    /* ---------- CLICK DETECTION (entire page) ---------- */
-    let clicks = [], secretTimeout = null, secretActive = false;
-
-    // Show the secret overlay — plays the secret video if available
     function showSecret() {
       if (secretActive) return;
       secretActive = true;
+      clearSecretTimeout();
 
-      // hide main heading
+      // hide heading
       mainHeading.classList.add('hidden');
 
-      // make secret visible
+      // show overlay
       secretOverlay.classList.add('visible');
       secretOverlay.setAttribute('aria-hidden', 'false');
 
-      // Try to play secret video (likely allowed because this is triggered by user clicks)
+      // play video if we have it
       if (secretVideo) {
-        // If the source is present, play it. If .play() fails, fallback to showing poster image.
-        const sources = secretVideo.querySelectorAll('source');
-        const hasSource = Array.from(sources).some(s => s.getAttribute('src'));
-        if (hasSource) {
-          // ensure video starts at 0
-          secretVideo.currentTime = 0;
-          // unmute (user gesture exists via clicks) and play with sound
-          secretVideo.muted = false;
-          secretVideo.play().then(() => {
-            console.log('Secret video playing with sound.');
-            // when it ends, hide secret
-            secretVideo.onended = () => { hideSecret(); };
-          }).catch(err => {
-            console.warn('Secret video play prevented or failed:', err);
-            // fallback to poster image display
-            showPosterFallback();
-          });
-          // As a safety, if video doesn't end for some reason, ensure we hide after a generous time (video length), but we prefer onended.
-        } else {
-          // no video source — show poster fallback
-          showPosterFallback();
-        }
+        // reset
+        try { secretVideo.pause(); secretVideo.currentTime = 0; } catch(e){}
+        secretVideo.muted = false; // allow sound – we had a user gesture
+        secretVideo.play().then(() => {
+          // when video ends, hide after a short delay
+          secretVideo.onended = () => {
+            clearSecretTimeout();
+            secretTimeout = setTimeout(hideSecret, POST_SHOW_MS);
+          };
+        }).catch(err => {
+          console.warn("secret video couldn't play (mobile autoplay, missing file, etc):", err);
+          // fallback: show poster for MAX_FALLBACK_MS
+          clearSecretTimeout();
+          secretTimeout = setTimeout(hideSecret, MAX_FALLBACK_MS);
+        });
       } else {
-        showPosterFallback();
+        // no video element at all
+        clearSecretTimeout();
+        secretTimeout = setTimeout(hideSecret, MAX_FALLBACK_MS);
       }
     }
 
-    // Hide secret, stop/rewind video
     function hideSecret() {
       if (!secretActive) return;
       secretActive = false;
+      clearSecretTimeout();
 
-      // hide secret overlay
+      // hide overlay
       secretOverlay.classList.remove('visible');
-      secretOverlay.setAttribute('aria-hidden','true');
+      secretOverlay.setAttribute('aria-hidden', 'true');
 
-      // stop and reset secret video if present
-      if (secretVideo && !secretVideo.paused) {
-        try {
-          secretVideo.pause();
-        } catch(e) {}
+      // stop video
+      if (secretVideo) {
+        try { secretVideo.pause(); } catch(e){}
+        try { secretVideo.currentTime = 0; } catch(e){}
+        secretVideo.onended = null;
       }
-      try { secretVideo.currentTime = 0; } catch(e){}
 
-      // small delay so the fade-out looks nicer before showing heading again
+      // bring heading back
       setTimeout(() => {
         mainHeading.classList.remove('hidden');
       }, 120);
-
-      // clear any fallback timeout
-      if (secretTimeout) { clearTimeout(secretTimeout); secretTimeout = null; }
     }
 
-    // If no secret video or playing fails, show the poster image for a few seconds
-    function showPosterFallback() {
-      // if secretVideo has poster, we can rely on it being visible; if browser doesn't show poster in <video>, we might replace with an <img> — but for simplicity the poster attribute should show while the video element is visible.
-      // fallback hide after MAX_FALLBACK_MS
-      if (secretTimeout) { clearTimeout(secretTimeout); secretTimeout = null; }
-      secretTimeout = setTimeout(() => {
-        hideSecret();
-      }, MAX_FALLBACK_MS);
-    }
-
-    // register click across entire document; ignore interactive elements so normal links/controls still work
+    /* click detection — whole screen */
     function registerClick(e) {
-      // ignore clicks on interactive elements
-      const tag = (e && e.target && e.target.tagName) ? e.target.tagName.toLowerCase() : '';
-      if (['a','button','input','textarea','select','label'].includes(tag)) return;
+      // let normal controls work without counting
+      const tag = e.target && e.target.tagName ? e.target.tagName.toLowerCase() : '';
+      if (['video','a','button','input','textarea','select','label'].includes(tag)) {
+        return;
+      }
 
       const now = Date.now();
       clicks.push(now);
-      // keep only those within WINDOW_MS
       clicks = clicks.filter(ts => now - ts <= WINDOW_MS);
       if (clicks.length >= NEEDED) {
         clicks = [];
@@ -289,15 +288,15 @@
       }
     }
 
-    // Attach listeners to whole document
     document.addEventListener('click', registerClick);
-    document.addEventListener('keyup', (e) => { if (e.key === 'Enter' || e.key === ' ') registerClick(e); });
+    document.addEventListener('keyup', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') registerClick(e);
+    });
 
-    // If user clicks while secret is visible, we ignore until it finishes. Also hide on blur so it doesn't get stuck
-    window.addEventListener('blur', () => { if (secretActive) hideSecret(); });
-
-    // small helpful console message
-    console.log('Secret trigger ready: 10 clicks within 2 seconds anywhere on the page. If secret audio fails to play, open DevTools console to inspect.');
+    // if you switch tabs while secret is open, hide it so it doesn't get stuck
+    window.addEventListener('blur', () => {
+      if (secretActive) hideSecret();
+    });
   })();
   </script>
 </body>
