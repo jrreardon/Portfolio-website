@@ -1,86 +1,13 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <title>kiwiwi</title>
-  <style>
-    html, body {
-      margin: 0;
-      padding: 0;
-      width: 100%;
-      height: 100%;
-      overflow: hidden;
-      background: #000;
-    }
-    #logo {
-      position: absolute;
-      width: 150px; /* change this if you want */
-      height: auto;
-      top: 0;
-      left: 0;
-    }
-  </style>
-</head>
-<body>
-  <!-- make sure this filename matches the image in your repo -->
-  <img src="7035BC48-9B9D-4D16-854A-1F69506CFCD2_1_105_c.jpeg" id="logo" alt="Bouncing Logo" />
+<html>
+    <head>
+        <title>kiwiwi</title>
+        <style>
+            * {margin:0; padding: 0; color:red;}
+        </style>
+    </head>
 
-  <script>
-    const logo = document.getElementById('logo');
-    const speed = 3; // pixels per frame
-    let x = 50;
-    let y = 50;
-    let dx = speed;
-    let dy = speed;
-
-    function startBouncing() {
-      const logoWidth = logo.offsetWidth;
-      const logoHeight = logo.offsetHeight;
-
-      function animate() {
-        const screenWidth = window.innerWidth;
-        const screenHeight = window.innerHeight;
-
-        x += dx;
-        y += dy;
-
-        // bounce horizontally
-        if (x + logoWidth >= screenWidth || x <= 0) {
-          dx = -dx;
-          changeColor();
-        }
-
-        // bounce vertically
-        if (y + logoHeight >= screenHeight || y <= 0) {
-          dy = -dy;
-          changeColor();
-        }
-
-        logo.style.left = x + 'px';
-        logo.style.top = y + 'px';
-
-        requestAnimationFrame(animate);
-      }
-
-      animate();
-    }
-
-    function changeColor() {
-      const randomColor = `hsl(${Math.random() * 360}, 100%, 50%)`;
-      logo.style.filter = `drop-shadow(0 0 10px ${randomColor}) saturate(200%)`;
-    }
-
-    // make sure image is loaded before we read its size
-    if (logo.complete) {
-      startBouncing();
-    } else {
-      logo.addEventListener('load', startBouncing);
-    }
-
-    // re-fit if the window resizes
-    window.addEventListener('resize', () => {
-      // nothing fancy here, but we could reset x/y if needed
-    });
-  </script>
-</body>
+    <body>
+        <canvas id="tv-screen"></canvas>
+        <script src="js/app.js"></script>
+    </body>
 </html>
