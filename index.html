@@ -204,6 +204,32 @@
       });
     }
 
+    /* ====== FADE-IN AUDIO ON FIRST CLICK ====== */
+  function fadeInAudio(video, duration = 2000) {
+    let start = null;
+    const step = (t) => {
+      if (!start) start = t;
+      const progress = Math.min((t - start) / duration, 1);
+      video.volume = 0.8 * progress; // fades up to 80% volume
+      if (progress < 1) requestAnimationFrame(step);
+    };
+    video.volume = 0;
+    requestAnimationFrame(step);
+  }
+  
+  // unmute background video once user clicks anywhere (one-time)
+  document.addEventListener(
+    "click",
+    () => {
+      if (bgVideo && bgVideo.muted) {
+        bgVideo.muted = false;
+        bgVideo.play().then(() => fadeInAudio(bgVideo));
+      }
+    },
+    { once: true }
+  );
+
+
     /* ====== SECRET LOGIC ====== */
     let clicks = [];
     let secretTimeout = null;
