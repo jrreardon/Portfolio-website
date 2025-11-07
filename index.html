@@ -13,7 +13,7 @@
       overflow:hidden;
     }
 
-    /* background video for desktop */
+    /* base background video (desktop) */
     .bg-video {
       position:fixed;
       inset:0;
@@ -22,10 +22,22 @@
       object-fit:cover;
       z-index:0;
       pointer-events:none;
-      filter:brightness(0.5);
+      filter:brightness(0.85);
+      transition:transform 250ms ease;
     }
 
-    /* center text */
+    /* MOBILE / PORTRAIT: rotate 90deg and center */
+    .bg-video.portrait {
+      /* we rotate, so swap width/height using viewport */
+      width:100vh;
+      height:100vw;
+      top:50%;
+      left:50%;
+      transform:translate(-50%, -50%) rotate(90deg);
+      object-fit:cover;
+    }
+
+    /* overlay text */
     .overlay {
       position:fixed;
       inset:0;
@@ -52,7 +64,6 @@
       font-weight:700;
       text-shadow:0 6px 14px rgba(0,0,0,.6);
       transition:opacity .45s ease, transform .45s ease;
-      will-change:opacity,transform;
       pointer-events:none;
     }
     .hidden {
@@ -61,7 +72,7 @@
       pointer-events:none;
     }
 
-    /* secret overlay with smoother animation */
+    /* secret popup */
     .secret {
       position:fixed;
       inset:0;
@@ -88,7 +99,6 @@
       opacity:0;
       transform:translateZ(0) scale(.995);
       transition:opacity 420ms cubic-bezier(.22,.9,.35,1), transform 420ms cubic-bezier(.22,.9,.35,1);
-      will-change:opacity,transform;
     }
     .secret.visible .secret-inner {
       opacity:1;
@@ -103,7 +113,6 @@
       box-shadow:0 10px 30px rgba(0,0,0,.6);
       backface-visibility:hidden;
       -webkit-backface-visibility:hidden;
-      -webkit-transform:translateZ(0);
     }
     .secret p {
       margin:0;
@@ -113,22 +122,15 @@
       text-shadow:0 4px 10px rgba(0,0,0,.6);
     }
 
-    /* -------- mobile / portrait tweaks -------- */
-    @media (max-width: 768px), (orientation: portrait) {
-      /* just make background black on mobile */
-      .bg-video {
-        display: none;
-      }
-      body {
-        background: #000;
-      }
-      h1 {
-        font-size: clamp(1.8rem, 9vw, 3rem);
-      }
+    /* make the popup media a bit smaller on narrow screens so you don’t have to zoom out */
+    @media (max-width: 768px) {
       .secret video,
       .secret img {
         max-width: 96vw;
         max-height: 60vh;
+      }
+      h1 {
+        font-size: clamp(1.8rem, 9vw, 3rem);
       }
     }
 
@@ -139,14 +141,14 @@
 </head>
 <body>
 
-  <!-- desktop background video -->
+  <!-- background video -->
   <video id="bgVideo" class="bg-video" muted autoplay playsinline preload="auto" loop>
     <source src="background.mp4" type="video/mp4" />
   </video>
 
-  <!-- center text -->
+  <!-- centered text -->
   <div class="overlay">
-    <div class="center-stack" id="centerStack" tabindex="0" aria-label="Secret trigger">
+    <div class="center-stack" id="centerStack" tabindex="0">
       <h1 id="mainHeading">Work in Progress</h1>
     </div>
   </div>
@@ -154,7 +156,6 @@
   <!-- secret popup -->
   <div class="secret" id="secretOverlay" aria-hidden="true">
     <div class="secret-inner">
-      <!-- secret video: 6s long, with poster -->
       <video
         id="secretVideo"
         poster="kiwi.jpeg"
@@ -165,46 +166,53 @@
       >
         <source src="kiwi.mp4" type="video/mp4" />
       </video>
-      <p>Kiwi says be patient!</p>
+      <p>Be patient!</p>
     </div>
   </div>
 
   <script>
   (function () {
-    /* config */
-    const WINDOW_MS = 2000;   // 10 clicks in 2s
-    const NEEDED    = 10;
-    const POST_SHOW_MS = 600; // after video ends, keep popup 0.6s
-    const MAX_FALLBACK_MS = 3500; // if no secret video plays, show poster this long
+    /* ====== CONFIG ====== */
+    const WINDOW_MS = 2000;   // 2 seconds
+    const NEEDED    = 10;     // 10 clicks
+    const POST_SHOW_MS = 600; // after secret video ends, stay up for 0.6s
+    const MAX_FALLBACK_MS = 3500; // if secret video can't play, show poster this long
 
-    const isMobile = window.matchMedia("(max-width: 768px), (orientation: portrait)").matches;
+    /* ====== ELEMENTS ====== */
+    const bgVideo       = document.getElementById('bgVideo');
+    const mainHeading   = document.getElementById('mainHeading');
+    const secretOverlay = document.getElementById('secretOverlay');
+    const secretVideo   = document.getElementById('secretVideo');
 
-    /* elements */
-    const bg           = document.getElementById('bgVideo');
-    const mainHeading  = document.getElementById('mainHeading');
-    const secretOverlay= document.getElementById('secretOverlay');
-    const secretVideo  = document.getElementById('secretVideo');
-
-    /* background video: desktop only */
-    function initBackground() {
-      if (!bg) return;
-      if (isMobile) {
-        // hide it for mobile so kiwi.jpeg doesn't take over
-        bg.style.display = 'none';
-        return;
+    /* ====== ORIENTATION HANDLING FOR BACKGROUND ====== */
+    function applyVideoOrientation() {
+      if (!bgVideo) return;
+      const isPortrait = window.matchMedia("(orientation: portrait)").matches;
+      if (isPortrait) {
+        bgVideo.classList.add('portrait');
+      } else {
+        bgVideo.classList.remove('portrait');
       }
-      bg.play().catch(() => {
-        // if desktop still can’t autoplay, just hide it and keep black bg
-        bg.style.display = 'none';
+    }
+    // run on load
+    applyVideoOrientation();
+    // run on rotate/orientation change
+    window.addEventListener('resize', applyVideoOrientation);
+    window.addEventListener('orientationchange', applyVideoOrientation);
+
+    // try to start bg video, but if mobile blocks it, just leave it there (no more hiding to black-with-kiwi)
+    if (bgVideo) {
+      bgVideo.play().catch(() => {
+        // mobile may block autoplay with sound, but it's muted so it should usually work.
+        // we DON'T hide it anymore; we just let it sit black.
+        console.warn("Background video couldn't autoplay (mobile likely). Leaving black background.");
       });
     }
 
-    initBackground();
-
-    /* secret logic */
+    /* ====== SECRET LOGIC ====== */
     let clicks = [];
     let secretTimeout = null;
-    let secretActive  = false;
+    let secretActive = false;
 
     function clearSecretTimeout() {
       if (secretTimeout) {
@@ -218,27 +226,26 @@
       secretActive = true;
       clearSecretTimeout();
 
-      // hide heading
+      // fade out main text
       mainHeading.classList.add('hidden');
 
-      // show overlay
+      // show secret overlay
       secretOverlay.classList.add('visible');
-      secretOverlay.setAttribute('aria-hidden', 'false');
+      secretOverlay.setAttribute('aria-hidden','false');
 
-      // play video if we have it
+      // try to play secret video with sound (we have user interaction: 10 clicks)
       if (secretVideo) {
-        // reset
         try { secretVideo.pause(); secretVideo.currentTime = 0; } catch(e){}
-        secretVideo.muted = false; // allow sound – we had a user gesture
+        secretVideo.muted = false;
         secretVideo.play().then(() => {
-          // when video ends, hide after a short delay
+          // when video finishes (you said it's ~6s), hide after POST_SHOW_MS
           secretVideo.onended = () => {
             clearSecretTimeout();
             secretTimeout = setTimeout(hideSecret, POST_SHOW_MS);
           };
         }).catch(err => {
-          console.warn("secret video couldn't play (mobile autoplay, missing file, etc):", err);
-          // fallback: show poster for MAX_FALLBACK_MS
+          console.warn("Secret video couldn't play, using poster fallback:", err);
+          // show poster for a bit
           clearSecretTimeout();
           secretTimeout = setTimeout(hideSecret, MAX_FALLBACK_MS);
         });
@@ -254,26 +261,24 @@
       secretActive = false;
       clearSecretTimeout();
 
-      // hide overlay
       secretOverlay.classList.remove('visible');
-      secretOverlay.setAttribute('aria-hidden', 'true');
+      secretOverlay.setAttribute('aria-hidden','true');
 
-      // stop video
       if (secretVideo) {
         try { secretVideo.pause(); } catch(e){}
         try { secretVideo.currentTime = 0; } catch(e){}
         secretVideo.onended = null;
       }
 
-      // bring heading back
+      // bring text back after fade
       setTimeout(() => {
         mainHeading.classList.remove('hidden');
       }, 120);
     }
 
-    /* click detection — whole screen */
+    /* ====== CLICK DETECTION (whole screen) ====== */
     function registerClick(e) {
-      // let normal controls work without counting
+      // ignore clicks on the actual video controls if they appear
       const tag = e.target && e.target.tagName ? e.target.tagName.toLowerCase() : '';
       if (['video','a','button','input','textarea','select','label'].includes(tag)) {
         return;
@@ -281,7 +286,9 @@
 
       const now = Date.now();
       clicks.push(now);
+      // keep only clicks in last WINDOW_MS
       clicks = clicks.filter(ts => now - ts <= WINDOW_MS);
+
       if (clicks.length >= NEEDED) {
         clicks = [];
         showSecret();
@@ -293,7 +300,7 @@
       if (e.key === 'Enter' || e.key === ' ') registerClick(e);
     });
 
-    // if you switch tabs while secret is open, hide it so it doesn't get stuck
+    // make sure secret doesn't stay stuck if they background the tab
     window.addEventListener('blur', () => {
       if (secretActive) hideSecret();
     });
