@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>DVD Bounce</title>
+  <title>kiwiwi</title>
   <style>
     html, body {
       margin: 0;
@@ -10,51 +10,77 @@
       width: 100%;
       height: 100%;
       overflow: hidden;
-      background-color: black;
+      background: #000;
     }
-
-    img {
+    #logo {
       position: absolute;
-      width: 150px; /* adjust size */
+      width: 150px; /* change this if you want */
       height: auto;
+      top: 0;
+      left: 0;
     }
   </style>
 </head>
 <body>
-  <img src="7035BC48-9B9D-4D16-854A-1F69506CFCD2_1_105_c.jpeg" id="kiwi" alt="Bouncing Kiwi">
+  <!-- make sure this filename matches the image in your repo -->
+  <img src="7035BC48-9B9D-4D16-854A-1F69506CFCD2_1_105_c.jpeg" id="logo" alt="Bouncing Logo" />
 
   <script>
     const logo = document.getElementById('logo');
     const speed = 3; // pixels per frame
-    let x = Math.random() * (window.innerWidth - kiwi.width);
-    let y = Math.random() * (window.innerHeight - kiwi.height);
+    let x = 50;
+    let y = 50;
     let dx = speed;
     let dy = speed;
 
-    function move() {
-      x += dx;
-      y += dy;
+    function startBouncing() {
+      const logoWidth = logo.offsetWidth;
+      const logoHeight = logo.offsetHeight;
 
-      if (x + kiwi.width >= window.innerWidth || x <= 0) {
-        dx = -dx;
-        changeColor();
-      }
-      if (y + kiwi.height >= window.innerHeight || y <= 0) {
-        dy = -dy;
-        changeColor();
+      function animate() {
+        const screenWidth = window.innerWidth;
+        const screenHeight = window.innerHeight;
+
+        x += dx;
+        y += dy;
+
+        // bounce horizontally
+        if (x + logoWidth >= screenWidth || x <= 0) {
+          dx = -dx;
+          changeColor();
+        }
+
+        // bounce vertically
+        if (y + logoHeight >= screenHeight || y <= 0) {
+          dy = -dy;
+          changeColor();
+        }
+
+        logo.style.left = x + 'px';
+        logo.style.top = y + 'px';
+
+        requestAnimationFrame(animate);
       }
 
-      logo.style.left = x + 'px';
-      logo.style.top = y + 'px';
-      requestAnimationFrame(move);
+      animate();
     }
 
     function changeColor() {
       const randomColor = `hsl(${Math.random() * 360}, 100%, 50%)`;
-      kiwi.style.filter = `drop-shadow(0 0 10px ${randomColor}) saturate(200%)`;
+      logo.style.filter = `drop-shadow(0 0 10px ${randomColor}) saturate(200%)`;
     }
 
-    window.onload = move;
+    // make sure image is loaded before we read its size
+    if (logo.complete) {
+      startBouncing();
+    } else {
+      logo.addEventListener('load', startBouncing);
+    }
+
+    // re-fit if the window resizes
+    window.addEventListener('resize', () => {
+      // nothing fancy here, but we could reset x/y if needed
+    });
   </script>
 </body>
 </html>
