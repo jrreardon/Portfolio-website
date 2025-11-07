@@ -13,7 +13,7 @@
       overflow:hidden;
     }
 
-    /* base background video (desktop) */
+    /* desktop / landscape background video */
     .bg-video {
       position:fixed;
       inset:0;
@@ -22,21 +22,21 @@
       object-fit:cover;
       z-index:0;
       pointer-events:none;
+      filter:brightness(0.85);
       transition:transform 250ms ease;
     }
 
-    /* MOBILE / PORTRAIT: rotate 90deg and center */
+    /* mobile / portrait: rotate + oversize to crop 4:3 */
     .bg-video.portrait {
-      /* we rotate, so swap width/height using viewport */
-      width:100vh;
-      height:100vw;
-      top:50%;
-      left:50%;
-      transform:translate(-50%, -50%) rotate(90deg);
-      object-fit:cover;
+      top: 50%;
+      left: 50%;
+      width: 120vh;
+      height: 120vw;
+      transform: translate(-50%, -50%) rotate(90deg);
+      object-fit: cover;
     }
 
-    /* overlay text */
+    /* center text */
     .overlay {
       position:fixed;
       inset:0;
@@ -121,7 +121,7 @@
       text-shadow:0 4px 10px rgba(0,0,0,.6);
     }
 
-    /* make the popup media a bit smaller on narrow screens so you don’t have to zoom out */
+    /* mobile sizing for popup */
     @media (max-width: 768px) {
       .secret video,
       .secret img {
@@ -165,17 +165,17 @@
       >
         <source src="kiwi.mp4" type="video/mp4" />
       </video>
-      <p>Be patient!</p>
+      <p>Kiwi says be patient!</p>
     </div>
   </div>
 
   <script>
   (function () {
     /* ====== CONFIG ====== */
-    const WINDOW_MS = 2000;   // 2 seconds
-    const NEEDED    = 10;     // 10 clicks
-    const POST_SHOW_MS = 600; // after secret video ends, stay up for 0.6s
-    const MAX_FALLBACK_MS = 3500; // if secret video can't play, show poster this long
+    const WINDOW_MS     = 2000;  // 2s
+    const NEEDED        = 10;    // 10 clicks
+    const SECRET_HARD_MS= 7000;  // hard max popup time (covers your 6s video)
+    const POST_SHOW_MS  = 600;   // after video ends, stay 0.6s
 
     /* ====== ELEMENTS ====== */
     const bgVideo       = document.getElementById('bgVideo');
@@ -183,7 +183,7 @@
     const secretOverlay = document.getElementById('secretOverlay');
     const secretVideo   = document.getElementById('secretVideo');
 
-    /* ====== ORIENTATION HANDLING FOR BACKGROUND ====== */
+    /* ====== ROTATE BG VIDEO ON PORTRAIT ====== */
     function applyVideoOrientation() {
       if (!bgVideo) return;
       const isPortrait = window.matchMedia("(orientation: portrait)").matches;
@@ -193,18 +193,14 @@
         bgVideo.classList.remove('portrait');
       }
     }
-    // run on load
     applyVideoOrientation();
-    // run on rotate/orientation change
     window.addEventListener('resize', applyVideoOrientation);
     window.addEventListener('orientationchange', applyVideoOrientation);
 
-    // try to start bg video, but if mobile blocks it, just leave it there (no more hiding to black-with-kiwi)
+    // try to play background; if mobile blocks, we just leave it black
     if (bgVideo) {
       bgVideo.play().catch(() => {
-        // mobile may block autoplay with sound, but it's muted so it should usually work.
-        // we DON'T hide it anymore; we just let it sit black.
-        console.warn("Background video couldn't autoplay (mobile likely). Leaving black background.");
+        console.warn("Background video couldn't autoplay on this device.");
       });
     }
 
@@ -225,33 +221,33 @@
       secretActive = true;
       clearSecretTimeout();
 
-      // fade out main text
+      // hide WIP text
       mainHeading.classList.add('hidden');
 
-      // show secret overlay
+      // show overlay
       secretOverlay.classList.add('visible');
       secretOverlay.setAttribute('aria-hidden','false');
 
-      // try to play secret video with sound (we have user interaction: 10 clicks)
+      // hard timeout: even if video doesn't play, close after SECRET_HARD_MS
+      secretTimeout = setTimeout(hideSecret, SECRET_HARD_MS);
+
+      // now try to play video with sound
       if (secretVideo) {
         try { secretVideo.pause(); secretVideo.currentTime = 0; } catch(e){}
-        secretVideo.muted = false;
-        secretVideo.play().then(() => {
-          // when video finishes (you said it's ~6s), hide after POST_SHOW_MS
-          secretVideo.onended = () => {
-            clearSecretTimeout();
-            secretTimeout = setTimeout(hideSecret, POST_SHOW_MS);
-          };
-        }).catch(err => {
-          console.warn("Secret video couldn't play, using poster fallback:", err);
-          // show poster for a bit
-          clearSecretTimeout();
-          secretTimeout = setTimeout(hideSecret, MAX_FALLBACK_MS);
-        });
-      } else {
-        // no video element at all
-        clearSecretTimeout();
-        secretTimeout = setTimeout(hideSecret, MAX_FALLBACK_MS);
+        secretVideo.muted = false; // we had user interaction (10 clicks), so this should be allowed
+        const playPromise = secretVideo.play();
+        if (playPromise !== undefined) {
+          playPromise.then(() => {
+            // video is actually playing; when it ends, we close sooner
+            secretVideo.onended = () => {
+              clearSecretTimeout();
+              secretTimeout = setTimeout(hideSecret, POST_SHOW_MS);
+            };
+          }).catch(err => {
+            console.warn("Secret video couldn't play, showing poster only:", err);
+            // we already set a hard timeout above, so nothing else to do
+          });
+        }
       }
     }
 
@@ -260,16 +256,18 @@
       secretActive = false;
       clearSecretTimeout();
 
+      // hide popup
       secretOverlay.classList.remove('visible');
       secretOverlay.setAttribute('aria-hidden','true');
 
+      // stop video
       if (secretVideo) {
         try { secretVideo.pause(); } catch(e){}
         try { secretVideo.currentTime = 0; } catch(e){}
         secretVideo.onended = null;
       }
 
-      // bring text back after fade
+      // bring back WIP text
       setTimeout(() => {
         mainHeading.classList.remove('hidden');
       }, 120);
@@ -277,7 +275,7 @@
 
     /* ====== CLICK DETECTION (whole screen) ====== */
     function registerClick(e) {
-      // ignore clicks on the actual video controls if they appear
+      // ignore clicks on real interactive elements
       const tag = e.target && e.target.tagName ? e.target.tagName.toLowerCase() : '';
       if (['video','a','button','input','textarea','select','label'].includes(tag)) {
         return;
@@ -285,9 +283,7 @@
 
       const now = Date.now();
       clicks.push(now);
-      // keep only clicks in last WINDOW_MS
       clicks = clicks.filter(ts => now - ts <= WINDOW_MS);
-
       if (clicks.length >= NEEDED) {
         clicks = [];
         showSecret();
@@ -299,10 +295,11 @@
       if (e.key === 'Enter' || e.key === ' ') registerClick(e);
     });
 
-    // make sure secret doesn't stay stuck if they background the tab
+    // if user backgrounds the tab while secret is open, close it
     window.addEventListener('blur', () => {
       if (secretActive) hideSecret();
     });
+
   })();
   </script>
 </body>
