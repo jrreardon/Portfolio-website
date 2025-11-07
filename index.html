@@ -2,18 +2,59 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>KIWI</title>
+  <title>DVD Bounce</title>
   <style>
     html, body {
-      height: 100%;
       margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: black;
     }
-    body {
-      background: url("7035BC48-9B9D-4D16-854A-1F69506CFCD2_1_105_c.jpeg") no-repeat center center fixed;
-      background-size: contain;
+
+    img {
+      position: absolute;
+      width: 150px; /* adjust size */
+      height: auto;
     }
   </style>
 </head>
 <body>
+  <img src="7035BC48-9B9D-4D16-854A-1F69506CFCD2_1_105_c.jpeg" id="kiwi" alt="Bouncing Kiwi">
+
+  <script>
+    const logo = document.getElementById('logo');
+    const speed = 3; // pixels per frame
+    let x = Math.random() * (window.innerWidth - kiwi.width);
+    let y = Math.random() * (window.innerHeight - kiwi.height);
+    let dx = speed;
+    let dy = speed;
+
+    function move() {
+      x += dx;
+      y += dy;
+
+      if (x + kiwi.width >= window.innerWidth || x <= 0) {
+        dx = -dx;
+        changeColor();
+      }
+      if (y + kiwi.height >= window.innerHeight || y <= 0) {
+        dy = -dy;
+        changeColor();
+      }
+
+      logo.style.left = x + 'px';
+      logo.style.top = y + 'px';
+      requestAnimationFrame(move);
+    }
+
+    function changeColor() {
+      const randomColor = `hsl(${Math.random() * 360}, 100%, 50%)`;
+      kiwi.style.filter = `drop-shadow(0 0 10px ${randomColor}) saturate(200%)`;
+    }
+
+    window.onload = move;
+  </script>
 </body>
 </html>
